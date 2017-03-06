@@ -151,7 +151,7 @@ strConfig config = {
   "/ota/esp8266-v1.php",
   "0",
   CHANNEL_ID,
-  APP_KEY,
+  API_KEY,
   "CFG"  // Magic Bytes
 };
 

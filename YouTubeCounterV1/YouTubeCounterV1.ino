@@ -28,7 +28,7 @@
 #define VERSION "V1.0"
 #define FIRMWARE SKETCH VERSION
 
-// #define SERIALDEBUG         // Serial is used to present debugging messages
+#define SERIALDEBUG         // Serial is used to present debugging messages
 #define REMOTEDEBUGGING     // UDP is used to transfer debug messages
 
 #define LEDS_INVERSE   // LEDS on = GND
@@ -69,7 +69,7 @@ extern "C" {
 #define LEDgreen 13
 //#define LEDred 12
 #else
-#define MODEBUTTON D2
+#define MODEBUTTON D3
 #define LEDgreen D7
 //#define LEDred D6
 #endif

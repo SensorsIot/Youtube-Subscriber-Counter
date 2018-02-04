@@ -24,6 +24,7 @@
 
 */
 #define SERIALDEBUG         // Serial is used to present debugging messages
+//#define DISPLAY
 
 #include <YoutubeApi.h>
 #include <SPI.h>
@@ -33,7 +34,7 @@
 #include <credentials.h>
 
 #define SKETCH "YoutubeCounter "
-#define VERSION "V1.1"
+#define VERSION "V1.6"
 #define COMPDATE __DATE__ __TIME__
 
 // ================================================ PIN DEFINITIONS ======================================
@@ -61,7 +62,6 @@ int rawIntensity, intensity;
 long lastSubscribers, subscribers;
 unsigned long entrySubscriberLoop;
 strDateTime dateTime;
-char dispField = 'S';
 int nextRound = 0;
 
 #include <IOTAppStory.h>
@@ -77,26 +77,42 @@ SNTPtime NTPch("ch.pool.ntp.org");
 
 // ================================================ SETUP ================================================
 void setup() {
-  IAS.serialdebug(true);     // 1st parameter: true or false for serial debugging. Default: false | When set to true or false serialdebug can be set from wifi config manager
-  //IAS.serialdebug(true,115200);                                                                             // 1st parameter: true or false for serial debugging. Default: false | 2nd parameter: serial speed. Default: 115200
-  /* TIP! delete the above lines when not used */
+  IAS.serialdebug(true);
   Serial.println("Start");
-
-  IAS.preSetConfig(mySSID, myPASSWORD, "YouTube", false);         // preset Wifi, boardName & automaticUpdate
-
-  IAS.begin(true, LEDgreen);   // 1st parameter: true or false to view BOOT STATISTICS | 2nd parameter: green feedback led integer | 3rd argument attach interrupt for the mode selection button
-
-
-  //-------- Your Setup starts from here ---------------
-
-  pinMode(A0, INPUT);
   myDisplay.begin();
   myDisplay.setIntensity (15);
+
+  IAS.preSetBoardname("YouTube");
+  IAS.preSetAutoUpdate(false);                      // automaticUpdate (true, false)
+  IAS.preSetAutoConfig(true);                      // automaticConfig (true, false)
+  IAS.preSetWifi(mySSID, myPASSWORD);
+
+  IAS.onModeButtonShortPress([]() {
+    Serial.println(" If mode button is released, I will enter in firmware update mode.");
+    Serial.println("*------------------------------------------------------------------------ -*");
+    dispMatrix("UPD");
+  });
+
+  IAS.onModeButtonLongPress([]() {
+    Serial.println(" If mode button is released, I will enter in configuration mode.");
+    Serial.println("*------------------------------------------------------------------------ -*");
+    dispMatrix("UPD");
+  });
+
+  IAS.onModeButtonVeryLongPress([]() {
+    Serial.println(" If mode button is released, I won't do anything.");
+    Serial.println("*-------------------------------------------------------------------------*");
+    dispMatrix("UPD");
+  });
+
+  IAS.begin(true, 'P');
+
   dispMatrix(VERSION);
+  pinMode(A0, INPUT);
+
   while (!NTPch.setSNTPtime()) Serial.print("."); // set internal clock
+  Serial.println("Setup done");
   delay(3000);
-
-
 }
 
 
@@ -113,55 +129,46 @@ void loop() {
   if (millis() - entrySubscriberLoop > nextRound) {
     entrySubscriberLoop = millis();
 
-    Serial.print("dispField: ");
-    Serial.println(dispField);
+    if (api.getChannelStatistics(CHANNEL_ID))
+    {
+      // get subscribers from YouTube
+      subscribers = api.channelStats.subscriberCount;
+      dispString(String(subscribers));
 
-    if (dispField == 'T') {
-      if (api.getChannelStatistics(CHANNEL_ID))
-      {
-        // get subscribers from YouTube
-        subscribers = api.channelStats.subscriberCount;
+      if ((subscribers > lastSubscribers) && (lastSubscribers > 0) ) {
+        beepUp();
+        if (subscribers % 10 <= lastSubscribers % 10) for (int ii = 0; ii < 1; ii++) beepUp();
+        if (subscribers % 100 <= lastSubscribers % 100) starwars();
+        if (subscribers % 1000 <= lastSubscribers % 1000) for (int ii = 0; ii < 3; ii++) starwars();
+      } else if (subscribers < lastSubscribers) beepDown();
+      lastSubscribers = subscribers;
+      Serial.println("---------Stats---------");
+      Serial.print("Subscriber Count: ");
+      Serial.println(api.channelStats.subscriberCount);
+      Serial.print("View Count: ");
+      Serial.println(api.channelStats.viewCount);
+      Serial.print("Comment Count: ");
+      Serial.println(api.channelStats.commentCount);
+      Serial.print("Video Count: ");
+      Serial.println(api.channelStats.videoCount);
+      // Probably not needed :)
+      Serial.print("hiddenSubscriberCount: ");
+      Serial.println(subscribers);
 
-        if (subscribers > lastSubscribers) {
-          beepUp();
-          if (subscribers % 10 <= lastSubscribers % 10) for (int ii = 0; ii < 1; ii++) beepUp();
-          if (subscribers % 100 <= lastSubscribers % 100) starwars();
-          if (subscribers % 1000 <= lastSubscribers % 1000) for (int ii = 0; ii < 3; ii++) starwars();
-        } else if (subscribers < lastSubscribers) beepDown();
-        lastSubscribers = subscribers;
-        Serial.println("---------Stats---------");
-        Serial.print("Subscriber Count: ");
-        Serial.println(api.channelStats.subscriberCount);
-        Serial.print("View Count: ");
-        Serial.println(api.channelStats.viewCount);
-        Serial.print("Comment Count: ");
-        Serial.println(api.channelStats.commentCount);
-        Serial.print("Video Count: ");
-        Serial.println(api.channelStats.videoCount);
-        // Probably not needed :)
-        Serial.print("hiddenSubscriberCount: ");
-        Serial.println(subscribers);
-
-        Serial.println("------------------------");
-        dispString(String(subscribers));
-        dispField = 'S';
-        nextRound = 7000;
-      }
+      Serial.println("------------------------");
+      nextRound = 10000;
     }
-    else {
-      dispTime();
-      dispField = 'T';
-      nextRound = 1500;
-    }
-
   }
 }
 
 
 void dispMatrix(String content) {
+#ifdef DISPLAY
+  Serial.println("dispMatrix");
   char charBuf[50];
   content.toCharArray(charBuf, 50);
   myDisplay.sendString(charBuf);
+#endif
 }
 
 
@@ -188,8 +195,6 @@ int adjustIntensity() {
   float _intensity = 15 - (15.0 / (560.0 - 0) * rawIntensity);
   int intensity = (_intensity > 15.0) ? 15 : (int)_intensity;
   intensity = (_intensity < 2.0) ? 0 : (int)_intensity;
-  // DEBUG_PRINT("Intensity to display ");
-  // DEBUG_PRINTLN(intensity);
   return intensity;
 }
 
@@ -213,6 +218,4 @@ void dispTime() {
   if (strMin.length() < 2) strMin = "0" + strMin;
   dispString(String(actualHour) + ":" + strMin);
 }
-
-
 
